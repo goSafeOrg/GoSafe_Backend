@@ -28,16 +28,21 @@ def upload_file():
     if file:
         # Save the uploaded file to the uploads directory
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(file_path)
+        try:
+            file.save(file_path)
 
-        # Process the image and extract text using OCR
-        text = process_image(file_path)
+            # Process the image and extract text using OCR
+            text = process_image(file_path)
 
-        # Extract key-value pairs from the text
-        key_value_pairs = extract_key_value_pairs(text)
+            # Extract key-value pairs from the text
+            key_value_pairs = extract_key_value_pairs(text)
 
-        # Return the extracted information as JSON
-        return jsonify({"data": key_value_pairs})
+            # Return the extracted information as JSON
+            return jsonify({"data": key_value_pairs})
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     
 @app.route('/test', methods=['GET'])
 def test():
