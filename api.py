@@ -39,8 +39,8 @@ def upload_file():
         # Return the extracted information as JSON
         return jsonify({"data": key_value_pairs})
     
-@app.route('test', methods=['GET'])
-def upload_file():
+@app.route('/test', methods=['GET'])
+def test():
    
         return jsonify({"data": "Route is working"})
 
