@@ -39,7 +39,10 @@ def upload_file():
         # Return the extracted information as JSON
         return jsonify({"data": key_value_pairs})
     
-
+@app.route('test', methods=['GET'])
+def upload_file():
+   
+        return jsonify({"data": "Route is working"})
 
 @app.route('/compare_faces', methods=['POST'])
 def compare_faces():
