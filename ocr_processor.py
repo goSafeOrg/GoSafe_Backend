@@ -10,7 +10,7 @@ def process_image(image_path):
     _, threshed = cv2.threshold(gray, 127, 255, cv2.THRESH_TRUNC)
     
     # Tesseract configuration
-    pytesseract.pytesseract.tesseract_cmd = "/usr/share/tesseract-ocr/5/tessdata"
+    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
     custom_config = r'--oem 3 --psm 11'
 
     # Run Tesseract OCR
