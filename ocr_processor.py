@@ -5,7 +5,7 @@ import pytesseract
 # Function to preprocess the image and extract text using Tesseract OCR
 def process_image(image_path):
     # Load image and preprocess
-    img = cv2.imreadgit (image_path)
+    img = cv2.imread (image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, threshed = cv2.threshold(gray, 127, 255, cv2.THRESH_TRUNC)
     
