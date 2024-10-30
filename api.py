@@ -2,10 +2,10 @@ from flask import Flask, request, jsonify
 import face_recognition
 import numpy as np
 import cv2
-import os 
+import os
 from ocr_processor import process_image, extract_key_value_pairs
-app = Flask(__name__)
 
+app = Flask(__name__)
 
 # Set directory for file uploads
 UPLOAD_FOLDER = 'uploads'
@@ -43,11 +43,9 @@ def upload_file():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    
 @app.route('/test', methods=['GET'])
 def test():
-   
-        return jsonify({"data": "Route is working"})
+    return jsonify({"data": "Route is working"})
 
 @app.route('/compare_faces', methods=['POST'])
 def compare_faces():
@@ -88,5 +86,55 @@ def compare_faces():
     else:
         return jsonify({"match": False, "distance": face_distance[0]})
 
+# New route to compare multiple images with a target image
+@app.route('/compare_with_multiple_faces', methods=['POST'])
+def compare_with_multiple_faces():
+    # Ensure 'target_image' and 'images[]' are in the request
+    if 'target_image' not in request.files or 'images' not in request.files:
+        return jsonify({"error": "Please provide both target_image and images[]"}), 400
+
+    # Convert the target image to a numpy array and then to RGB
+    target_file = request.files['target_image']
+    target_image_np = np.frombuffer(target_file.read(), np.uint8)
+    target_image = cv2.imdecode(target_image_np, cv2.IMREAD_COLOR)
+    target_image_rgb = cv2.cvtColor(target_image, cv2.COLOR_BGR2RGB)
+
+    # Detect face encoding in the target image
+    target_encoding = face_recognition.face_encodings(target_image_rgb)
+    if len(target_encoding) == 0:
+        return jsonify({"error": "No face detected in the target image"}), 400
+
+    target_encoding = target_encoding[0]
+
+    # Initialize results list
+    results = []
+
+    # Iterate over each file in 'images'
+    for img_file in request.files.getlist('images'):
+        # Convert image to numpy array and RGB
+        img_np = np.frombuffer(img_file.read(), np.uint8)
+        img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # Detect face encoding in the current image
+        encodings = face_recognition.face_encodings(img_rgb)
+        if len(encodings) == 0:
+            results.append({"image_name": img_file.filename, "match": False, "status": "No face detected"})
+            continue
+
+        # Compare faces and calculate distance
+        match = face_recognition.compare_faces([target_encoding], encodings[0])[0]
+        face_distance = face_recognition.face_distance([target_encoding], encodings[0])[0]
+
+        # Append result
+        results.append({
+            "image_name": img_file.filename,
+            "match": match,
+            "distance": face_distance,
+            "status": "Match found" if match else "No match"
+        })
+
+    return jsonify({"results": results})
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0' , debug=True, port=5000)
+    app.run(host='0.0.0.0', debug=True, port=5000)
