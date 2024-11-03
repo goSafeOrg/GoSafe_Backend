@@ -1,4 +1,4 @@
-from supabase import create_client, Client
+from supabaseInit import create_client, Client
 import os
 
 # Set up Supabase client
