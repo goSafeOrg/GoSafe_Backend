@@ -8,7 +8,8 @@ import json
 from PIL import Image, ImageOps
 from supabase import create_client, Client
 import os
-
+from licenseFaceDetection import extract_face_from_license
+from license_authentication import authenticate_license
 # Set up Supabase client
 SUPABASE_URL = "https://igbtezppidteqhbauxlv.supabase.co"  # Add your Supabase URL here or set it as an environment variable
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlnYnRlenBwaWR0ZXFoYmF1eGx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjkxODU5MDUsImV4cCI6MjA0NDc2MTkwNX0.MnP_05Bb5fA4G3DEyzeO4KmU6xVkyazj6ruzosPZyJk"  # Add your Supabase API key here or set it as an environment variable
@@ -137,16 +138,33 @@ def send_license_to_api(image_path):
     
     return response.json()
 
-# Authenticate license and retrieve license image
-def authenticate_license(dob, license_id):
-    # url = f'http://public-api/license/validate?dob={dob}&license_id={license_id}'
-    # response = requests.get(url)
-    # if response.status_code == 200:
-    #     data = response.json()
-    #     return data.get('image_url'), data.get('status')  # Image URL and status
-    return {'img':'license_photo.jpg', 'status':'Valid','name':'nikhil','license_id':license_id}
+def upload_image(image_path, storage_bucket, destination_path):
+    """
+    Uploads an image to a specified Supabase storage bucket and returns the public URL.
 
-# Send captured face to comparison API
+    Args:
+        image_path (str): The local path to the image file.
+        storage_bucket (str): The Supabase storage bucket name.
+        destination_path (str): The destination path in the bucket.
+
+    Returns:
+        str: The public URL of the uploaded image.
+    """
+    with open(image_path, "rb") as image_file:
+        image_data = image_file.read()
+        
+    # Upload the image
+    response = supabase.storage.from_(storage_bucket).upload(destination_path, image_data ,   {"content_type": 'image/jpg'})
+    response=response.json()
+    if response.get("error"):
+        print("Error uploading file:", response["error"])
+        return None
+    
+    # Generate the public URL for the uploaded image
+    public_url = supabase.storage.from_(storage_bucket).get_public_url(destination_path)
+   
+    return public_url
+
 def compare_face(image_path, license_image_path):
     url = 'http://13.201.153.161:5000/compare_faces'
     with open(image_path, 'rb') as image_file1, open(license_image_path, 'rb') as image_file2:
@@ -339,35 +357,45 @@ def main_process():
         # Capture license image for OCR extraction
         time.sleep(2)
 
-        voice_prompt(" Please keep your license still.")
-        # success, license_image_path = capture_image("license_image.jpg")
-        success, license_image_path= True ,"license_image.jpg"
+        voice_prompt(" Please show the side with your image")
+        # success, license_image_photo_path = capture_image("license_image_photo.jpg")
+        success, license_image_photo_path= True ,"hlf.jpeg"
         if not success:
             print("Failed to capture license image.")
             return
 
+        voice_prompt(" Please show the side with your license id and date of birth")
+        # success, license_image_path = capture_image("license_image.jpg")
+        success, license_image_path= True ,"license_image.jpg"
         # Extract license information via OCR
         license_info = send_license_to_api(license_image_path)
         # print(license_info,license_info["data"])
         dob, license_id = license_info['data']['dob'], license_info['data']['licnese_no']
+        dob = datetime.strptime(dob, "%d/%m/%Y").strftime("%Y-%m-%d")
         print(dob,license_id)
 
     #     # Authenticate license via public API
         license_data = authenticate_license(dob, license_id)
-        if license_data['status']!= "Valid":
+        if license_data['status']!= "Active":
             voice_prompt("License is not valid.")
             return
 
     #     # Compare face with license image
-        result = compare_face(face_image_path, license_data['img'])
+        result = compare_face(face_image_path, license_image_photo_path)
         if result.get("match"):
-            
+
+            url = upload_image(
+                face_image_path,
+                'user-images',
+                 f"profiles/{USER_ID}/unregistered_members/{license_data['name']}-{license_id}-{datetime.now().isoformat()}.jpg"
+                )
+            time.sleep(2)
             user_id = USER_ID  # Replace with the actual user ID or retrieve accordingly
             name = license_data['name'] 
             from_user = deviceId  # Or specify who the notification is from
             license_id =license_data['license_id'] 
-            description = "Face matched with registered member."
-            image_url = 'https://picsum.photos/id/1/200/300'
+            description = "Face matched does not match with registered license."
+            image_url = url
             message = "Face verification successful."
             status = "Pending"
 
@@ -385,8 +413,40 @@ def main_process():
          
             voice_prompt("Face verification with license successful.")
             voice_prompt("Please wait for approval")
-           
-            while status_response is None:
+        else:
+            voice_prompt("Face does not match with the license image.")
+
+            url = upload_image(
+                face_image_path,
+                'user-images',
+                 f"profiles/{USER_ID}/unregistered_members/{license_data['name']}-{license_id}-{datetime.now().isoformat()}.jpg"
+                )
+            time.sleep(2)
+            user_id = USER_ID  # Replace with the actual user ID or retrieve accordingly
+            name = license_data['name'] 
+            from_user = deviceId  # Or specify who the notification is from
+            license_id =license_data['license_id'] 
+            description = "Face does not match with registered ID."
+            image_url = url
+            message = "Face verification failed. Yet Approve?"
+            status = "Pending"
+
+            send_notification(
+                user_id=user_id,
+                message=message,
+                name=name,
+                from_user=from_user,
+                license_id=license_id,
+                description=description,
+                image_url=image_url,
+                status=status
+            )
+        
+         
+
+
+
+        while status_response is None:
                 socketio.sleep(0.1)  # This keeps the event loop running
                 print(status_response,'kjhgfd')
                     # Now you can handle the approval/rejection
@@ -399,20 +459,21 @@ def main_process():
 
          
     #         # Set up periodic monitoring
-            previous_image_path = face_image_path
-            while True:
-                time.sleep(100)  
+        previous_image_path = face_image_path
+        while True:
+                time.sleep(20)  
                 success, new_face_image_path = capture_image("new_face_image.jpg")
                 if success:
                     match_result = compare_face(new_face_image_path, previous_image_path)
+                    print(match_result)
                     if not match_result.get("match"):
                         voice_prompt("Face does not match. Please show your license again.")
                         main_process()  # Restart process if face does not match
                         break
                     previous_image_path = new_face_image_path
-        else:
-            print("Face does not match with the license image.")
-            socketio.emit('approval_notification', {'status': 'rejected', 'message': 'Face did not match with license'})
+      
+          
+         
 
     # else:
     #     print("Face match found with registered member.")
