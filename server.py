@@ -121,15 +121,26 @@ def handle_message(data):
 def handle_request_location(data):
     device_id = data.get('deviceId')
     print(f'Requesting location for device: {device_id}')
-    
-    # For demonstration, return a mock location (you can replace this with actual logic)
-    location_data = {
-        'latitude': 37.7749,  # Example latitude (San Francisco)
-        'longitude': -122.4194  # Example longitude (San Francisco)
-    }
 
     # Send the location back to the requesting client
-    emit('locationUpdate', location_data, room=device_id)
+    emit('GetlocationUpdate', room=device_id)
+
+@socketio.on('locationUpdate')
+def handle_update_location(data):
+    try:
+        loc = data.get('loc')
+        device_id = data.get('room')
+        
+        if not loc or not device_id:
+            emit('error', {'message': 'Missing location or room information'})
+            return
+        
+        print(f"Sending location for device: {device_id}")
+        emit('locationDetails', {'loc': loc}, room=device_id)
+    except Exception as e:
+        print(f"Error in handle_update_location: {str(e)}")
+        emit('error', {'message': str(e)})
+
 
 @socketio.on('requestStatus')
 def handle_request_Status(data):
